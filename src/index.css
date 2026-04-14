@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-background: 0 0% 99%;
+    --color-foreground: 222 25% 20%;
+    --color-border: 222 15% 85%;
+    --color-input: 0 0% 85%;
+    --color-ring: 210 85% 55%;
+    
+    --color-primary: 222 75% 52%;
+    --color-primary-foreground: 0 0% 100%;
+    --color-primary-hover: 222 75% 42%;
+    --color-primary-active: 222 75% 38%;
+    
+    --color-secondary: 222 65% 60%;
+    --color-secondary-foreground: 0 0% 100%;
+    --color-secondary-hover: 222 65% 50%;
+    --color-secondary-active: 222 65% 45%;
+    
+    --color-tertiary: 240 35% 95%;
+    --color-tertiary-foreground: 222 35% 25%;
+    
+    --color-accent: 266 80% 60%;
+    --color-accent-foreground: 0 0% 100%;
+    
+    --color-success: 145 60% 40%;
+    --color-success-foreground: 0 0% 100%;
+    
+    --color-warning: 45 100% 50%;
+    --color-warning-foreground: 0 0% 10%;
+    
+    --color-error: 0 80% 50%;
+    --color-error-foreground: 0 0% 100%;
+    
+    --color-info: 210 85% 45%;
+    --color-info-foreground: 0 0% 100%;
+    
+    --color-muted: 0 0% 95%;
+    --color-muted-foreground: 0 0% 40%;
+    
+    --color-card: 0 0% 100%;
+    --color-card-foreground: 222 25% 20%;
+    
+    --color-popover: 0 0% 100%;
+    --color-popover-foreground: 222 25% 20%;
+ 
+    --font-sans: "Inter", sans-serif;
+    --font-heading: "DM Sans", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+    
+    --spacing-xs: 8px;
+    --spacing-sm: 16px;
+    --spacing-md: 24px;
+    --spacing-lg: 32px;
+    --spacing-xl: 48px;
+    --spacing-2xl: 64px;
+    
+    --border-radius-sm: 4px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    
+    --shadow-sm: 0 1px 2px hsla(0, 0%, 0%, 0.05);
+    --shadow-md: 0 2px 4px hsla(0, 0%, 0%, 0.1);
+    --shadow-lg: 0 4px 10px hsla(0, 0%, 0%, 0.15);
+    --shadow-xl: 0 6px 20px hsla(0, 0%, 0%, 0.2);
+  }
+  
+  * {
+    @apply border-border;
+  }
+  
+  html,
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer utilities {
+  .text-gradient-primary {
+    background: linear-gradient(135deg, hsl(222, 75%, 52%), hsl(266, 80%, 60%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
