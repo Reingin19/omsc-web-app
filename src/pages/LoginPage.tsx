@@ -68,7 +68,7 @@ export default function LoginPage({ onLogin, onBackToHome }: LoginPageProps) {
 
     setIsLoading(true);
     
-    const endpoint = isRegister ? 'http://localhost:3001/register' : 'http://localhost:3001/login';
+    const endpoint = isRegister ? '/api/register' : '/api/login';
     
     const payload = isRegister 
       ? { 
