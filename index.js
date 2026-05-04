@@ -8,37 +8,43 @@ const app = express();
 
 // --- MIDDLEWARE ---
 app.use(cors({
-    origin: '*', // Mas safe kung specific Vercel URL mo ilalagay mo rito later
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: '*', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '1mb' }));
 
 // --- SUPABASE CONFIG ---
-// Gagamit tayo ng fallback sa standard names para sa Vercel deployment
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-// Admin Client (Bypasses RLS - for logs and creating auth accounts)
+// Admin Client
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Anon Client (Follows RLS - for generating user sessions)
+// Anon Client
 const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
 
-// --- LOGGER HELPER ---
+// --- LOGGER HELPER (Optimized for Serverless) ---
 const logActivity = async (action, userEmail, status, details, req) => {
     try {
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0';
-        await supabase.from('security_logs').insert([
+        // Hindi natin gagamitin ang 'await' dito para hindi ma-delay ang response sa user
+        supabase.from('security_logs').insert([
             { action, user_email: userEmail, status, details, ip_address: ip }
-        ]);
+        ]).then(({ error }) => {
+            if (error) console.error("🔥 Logger DB Error:", error.message);
+        });
     } catch (err) {
-        console.error("🔥 Logger Error:", err.message);
+        console.error("🔥 Logger Runtime Error:", err.message);
     }
 };
 
 // --- ROUTES ---
+
+// Health Check (Para ma-test kung gising ang backend)
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: "OK", message: "Backend is running" });
+});
 
 // 1. REGISTER
 app.post('/api/register', async (req, res) => {
@@ -51,7 +57,6 @@ app.post('/api/register', async (req, res) => {
     const cleanStudentId = studentId?.trim();
 
     try {
-        // Check if user exists
         const { data: existing } = await supabase
             .from('users')
             .select('email')
@@ -63,7 +68,6 @@ app.post('/api/register', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Save to your public.users table
         const { data, error: dbError } = await supabase
             .from('users')
             .insert([{
@@ -80,7 +84,6 @@ app.post('/api/register', async (req, res) => {
 
         if (dbError) throw dbError;
 
-        // Create Supabase Auth Account (Para may session sila)
         await supabase.auth.admin.createUser({
             email: cleanEmail,
             password: password,
@@ -88,20 +91,20 @@ app.post('/api/register', async (req, res) => {
             user_metadata: { name: name.trim(), role: role || 'student' }
         });
 
-        await logActivity('User Registration', cleanEmail, 'success', `New account: ${name}`, req);
+        logActivity('User Registration', cleanEmail, 'success', `New account: ${name}`, req);
         res.status(201).json({ message: "Account created!", userId: data[0].id });
     } catch (error) {
+        console.error("Registration Error:", error.message);
         res.status(500).json({ message: error.message });
     }
 });
 
-// 2. LOGIN (The "Fix-it-all" Route)
+// 2. LOGIN
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     const cleanEmail = email?.trim().toLowerCase();
 
     try {
-        // Find user in your DB
         const { data: user, error } = await supabase
             .from('users')
             .select('*')
@@ -113,14 +116,13 @@ app.post('/api/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
-        // Get or Create Auth Session
         let { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
             email: cleanEmail,
             password: password,
         });
 
-        // If no auth account yet (for old users), create it now
         if (authError) {
+            // Auto-create auth account kung wala pa
             await supabase.auth.admin.createUser({
                 email: cleanEmail,
                 password: password,
@@ -135,7 +137,7 @@ app.post('/api/login', async (req, res) => {
             authData = retry.data;
         }
 
-        await logActivity('User Login', cleanEmail, 'success', `Logged in as ${user.role}`, req);
+        logActivity('User Login', cleanEmail, 'success', `Logged in as ${user.role}`, req);
 
         res.json({ 
             id: user.id, 
@@ -147,11 +149,12 @@ app.post('/api/login', async (req, res) => {
             refresh_token: authData?.session?.refresh_token || null
         });
     } catch (err) {
+        console.error("Login Error:", err.message);
         res.status(500).json({ message: "Internal server error" });
     }
 });
 
-// 3. LOGS (For Admin Dashboard)
+// 3. LOGS
 app.get('/api/admin/security-logs', async (req, res) => {
     const { data, error } = await supabase
         .from('security_logs')
@@ -162,9 +165,6 @@ app.get('/api/admin/security-logs', async (req, res) => {
     res.json(data);
 });
 
-// --- VERCEL EXPORT ---
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(3001, () => console.log('🚀 Local dev on port 3001'));
-}
-
+// --- VERCEL EXPORT (CRITICAL FIX) ---
+// Sa Vercel, kailangan i-export ang app mismo
 export default app;
