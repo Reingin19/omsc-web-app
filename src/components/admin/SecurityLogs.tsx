@@ -1,216 +1,169 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { 
-  Search, 
-  Download, 
-  Shield, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Loader2, 
-  User, 
-  FileUp, 
-  FileDown,
-  Trash2, 
-  Edit3, 
-  PlusCircle, 
-  Database,
-  Key,
-  ClipboardCheck
+  Search, Loader2, Activity, LogIn, Calendar, 
+  ClipboardCheck, UserPlus, GraduationCap, Trash2, Monitor
 } from 'lucide-react';
-import { useToast } from '../../hooks/use-toast';
 
-interface SecurityLog {
-  id: number;
-  action: string;
-  user: string;
-  status: 'success' | 'warning' | 'danger' | string;
-  details: string;
-  ip_address: string;
-  created_at: string;
-}
+const getActionConfig = (action: string = "") => {
+  const act = action.toLowerCase();
+  
+  // Login/Security
+  if (act.includes('login') || act.includes('session')) 
+    return { icon: <LogIn className="text-blue-600" />, label: 'Auth', color: 'bg-blue-50' };
+  
+  // Academic & Quizzes
+  if (act.includes('quiz')) 
+    return { icon: <ClipboardCheck className="text-purple-500" />, label: 'Quiz', color: 'bg-purple-50' };
+  
+  // Programs & Enrollment
+  if (act.includes('enroll') || act.includes('join') || act.includes('registration')) 
+    return { icon: <UserPlus className="text-indigo-500" />, label: 'Registration', color: 'bg-indigo-50' };
+  
+  // Events & Programs Creation
+  if (act.includes('event') || act.includes('program create')) 
+    return { icon: <Calendar className="text-rose-500" />, label: 'Management', color: 'bg-rose-50' };
+  
+  // Academic Grading
+  if (act.includes('grade')) 
+    return { icon: <GraduationCap className="text-emerald-500" />, label: 'Grading', color: 'bg-emerald-50' };
+
+  // System Changes / Deletion
+  if (act.includes('delete') || act.includes('remove')) 
+    return { icon: <Trash2 className="text-rose-600" />, label: 'Critical', color: 'bg-rose-100' };
+  
+  return { icon: <Activity className="text-slate-500" />, label: 'Activity', color: 'bg-slate-50' };
+};
 
 export default function SecurityLogs() {
-  const { toast } = useToast();
-  const [logs, setLogs] = useState<SecurityLog[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
 
-  const fetchLogs = async () => {
-    try {
-      const res = await fetch('http://localhost:3001/admin/security-logs');
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setLogs(data);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Sync Error", description: "Could not sync activity logs." });
-    } finally {
-      setLoading(false);
-    }
+  const fetchLogs = () => {
+    setLoading(true);
+    fetch('http://localhost:3001/admin/security-logs')
+      .then(res => res.json())
+      .then(data => {
+        // Siguraduhin na Array ang data para hindi mag-error ang .filter()
+        setLogs(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Fetch error:", err);
+        setLoading(false);
+      });
   };
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
+  useEffect(() => { fetchLogs(); }, []);
 
-  const filteredLogs = logs.filter((log) => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = 
-      log.action?.toLowerCase().includes(query) || 
-      log.user?.toLowerCase().includes(query) ||
-      log.details?.toLowerCase().includes(query);
-    
-    const matchesStatus = statusFilter === 'all' || log.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  // MAS DETALYADONG ICON DETECTION PARA SA LAHAT NG ACTIONS
-  const getLogConfig = (action: string) => {
-    const act = action.toLowerCase();
-    if (act.includes('upload')) return { icon: <FileUp className="w-4 h-4 text-blue-500" />, label: 'Upload' };
-    if (act.includes('download') || act.includes('export')) return { icon: <FileDown className="w-4 h-4 text-indigo-500" />, label: 'Download' };
-    if (act.includes('delete') || act.includes('remove')) return { icon: <Trash2 className="w-4 h-4 text-rose-500" />, label: 'Deletion' };
-    if (act.includes('update') || act.includes('edit') || act.includes('modify')) return { icon: <Edit3 className="w-4 h-4 text-amber-500" />, label: 'Update' };
-    if (act.includes('create') || act.includes('add') || act.includes('new')) return { icon: <PlusCircle className="w-4 h-4 text-emerald-500" />, label: 'Creation' };
-    if (act.includes('quiz') || act.includes('test')) return { icon: <ClipboardCheck className="w-4 h-4 text-purple-500" />, label: 'Quiz Action' };
-    if (act.includes('login') || act.includes('password')) return { icon: <Key className="w-4 h-4 text-orange-500" />, label: 'Security' };
-    return { icon: <Database className="w-4 h-4 text-slate-500" />, label: 'System' };
-  };
-
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'success': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'warning': return 'bg-amber-50 text-amber-700 border-amber-100';
-      case 'danger': return 'bg-rose-50 text-rose-700 border-rose-100';
-      default: return 'bg-slate-50 text-slate-700 border-slate-100';
-    }
-  };
-
-  const exportToCSV = () => {
-    const headers = ["Timestamp", "User", "Action", "Status", "Details", "IP Address"];
-    const csvContent = [
-      headers.join(','),
-      ...filteredLogs.map(l => [
-        `"${new Date(l.created_at).toLocaleString()}"`,
-        `"${l.user}"`,
-        `"${l.action}"`,
-        `"${l.status}"`,
-        `"${l.details.replace(/"/g, '""')}"`,
-        `"${l.ip_address}"`
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Audit_Trail_${new Date().getTime()}.csv`;
-    link.click();
-  };
+  // Updated filter: gumagamit na ng 'user_email' imbes na 'user'
+  const filteredLogs = logs.filter(l => 
+    (l.action?.toLowerCase() || "").includes(search.toLowerCase()) || 
+    (l.user_email?.toLowerCase() || "").includes(search.toLowerCase()) ||
+    (l.details?.toLowerCase() || "").includes(search.toLowerCase())
+  );
 
   return (
-    <div className="space-y-8 p-2 animate-in fade-in duration-500">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
+      {/* Header Section */}
+      <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase mb-2">
-            System <span className="text-indigo-600">Audit Trail</span>
+          <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-900">
+            System <span className="text-indigo-600">Omni-Audit</span>
           </h1>
-          <p className="text-slate-500 font-medium tracking-tight uppercase text-xs">Complete record of uploads, downloads, creations, and modifications</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+            Real-time Visibility: Logins, Enrollments, & System Events
+          </p>
         </div>
-        <Button 
-          onClick={exportToCSV} 
-          className="bg-slate-900 hover:bg-indigo-600 rounded-2xl h-12 px-8 font-black uppercase text-[10px] tracking-widest transition-all shadow-xl shadow-slate-200"
+        <button 
+          onClick={fetchLogs} 
+          disabled={loading}
+          className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
         >
-          <Download className="w-4 h-4 mr-2" /> Export Logs
-        </Button>
+           <Monitor className={`w-5 h-5 text-indigo-600 ${loading ? 'animate-pulse' : ''}`} />
+        </button>
       </div>
 
-      {/* FILTERS */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-[2rem] shadow-sm border border-slate-100">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <Input 
-            placeholder="Search by user, action (e.g. 'quiz', 'upload')..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 h-12 bg-slate-50 border-none rounded-2xl font-bold"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full md:w-48 h-12 bg-slate-50 border-none rounded-2xl font-black uppercase text-[10px]">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent className="rounded-2xl border-none shadow-xl">
-            <SelectItem value="all">All Logs</SelectItem>
-            <SelectItem value="success">Successful</SelectItem>
-            <SelectItem value="warning">Warnings</SelectItem>
-            <SelectItem value="danger">Critical Errors</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+        <input 
+          type="text"
+          placeholder="Trace email, action, or specific details..."
+          className="w-full pl-16 pr-6 py-5 bg-white rounded-[2rem] border-none shadow-md font-bold text-slate-700 focus:ring-2 ring-indigo-500 transition-all outline-none"
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      {/* LOGS LIST */}
-      {loading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
-          <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest">Loading Audit Data...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {filteredLogs.length > 0 ? filteredLogs.map((log) => {
-            const { icon, label } = getLogConfig(log.action);
-            return (
-              <Card key={log.id} className="p-6 rounded-[2.5rem] border-none shadow-sm bg-white group hover:shadow-md transition-all">
-                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4 w-full">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border ${getStatusStyle(log.status)}`}>
-                      {log.status === 'danger' ? <AlertTriangle className="w-6 h-6 text-rose-500" /> : icon}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 tracking-tighter">
-                          {label}
-                        </span>
-                        <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm truncate">
-                          {log.action}
-                        </h3>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <User className="w-3 h-3 text-indigo-600" />
-                          <span className="text-[11px] font-black text-indigo-600 uppercase tracking-tight">{log.user}</span>
-                        </div>
-                        <span className="text-slate-200 hidden md:inline">|</span>
-                        <p className="text-[11px] font-medium text-slate-500 truncate max-w-md">{log.details}</p>
-                      </div>
+      {/* Logs List */}
+      <div className="space-y-4">
+        {loading ? (
+           <div className="flex flex-col items-center justify-center p-20 space-y-4">
+             <Loader2 className="animate-spin text-indigo-600 w-10 h-10" />
+             <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Syncing with Cloud...</p>
+           </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="text-center p-20 bg-white rounded-[2rem] shadow-sm">
+            <p className="text-slate-400 font-bold uppercase text-sm">No activity found matching your search.</p>
+          </div>
+        ) : filteredLogs.map((log) => {
+          const config = getActionConfig(log.action);
+          return (
+            <Card key={log.id} className="p-6 border-none shadow-sm rounded-[2.5rem] bg-white hover:shadow-xl transition-all border-l-4 border-l-transparent hover:border-l-indigo-500 overflow-hidden group">
+              <div className="flex items-center gap-6">
+                {/* Action Icon */}
+                <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${config.color}`}>
+                  {config.icon}
+                </div>
 
-                      <div className="mt-3 pt-3 border-t border-slate-50 flex items-center justify-between">
-                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Terminal: {log.ip_address}</span>
-                         <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Logged: {new Date(log.created_at).toLocaleString()}</span>
-                      </div>
-                    </div>
+                {/* Log Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="px-3 py-1 rounded-xl bg-slate-100 text-[9px] font-black uppercase text-slate-600 tracking-widest">
+                      {config.label}
+                    </span>
+                    <h2 className="font-black text-slate-800 uppercase text-sm truncate">
+                      {log.action || "Undefined Action"}
+                    </h2>
                   </div>
-
-                  <div className={`hidden lg:block px-4 py-2 rounded-2xl font-black text-[9px] uppercase tracking-widest border ${getStatusStyle(log.status)}`}>
-                    {log.status}
+                  
+                  <div className="flex flex-wrap items-center gap-y-1 gap-x-4">
+                    <div className="flex items-center gap-2">
+                       <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center font-black text-[10px] text-indigo-600">
+                         {(log.user_email || "?").charAt(0).toUpperCase()}
+                       </div>
+                       <span className="text-xs font-black text-slate-900 uppercase">
+                         @{log.user_email ? log.user_email.split('@')[0] : 'anonymous'}
+                       </span>
+                    </div>
+                    <span className="text-slate-300 hidden md:block">•</span>
+                    <p className="text-xs font-medium text-slate-500 italic truncate max-w-md">
+                      "{log.details || "No additional details provided."}"
+                    </p>
                   </div>
                 </div>
-              </Card>
-            );
-          }) : (
-            <div className="p-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
-               <Shield className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-               <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest">No matching activity found in audit trail</p>
-            </div>
-          )}
-        </div>
-      )}
+
+                {/* Timestamp & Meta */}
+                <div className="text-right shrink-0 hidden sm:block">
+                  <p className="text-[11px] font-black text-slate-900">
+                    {log.created_at ? new Date(log.created_at).toLocaleTimeString() : '--:--'}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">
+                    {log.created_at ? new Date(log.created_at).toLocaleDateString() : 'N/A'}
+                  </p>
+                  <div className="flex items-center justify-end gap-1 mt-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <p className="text-[8px] font-mono text-slate-300">
+                      {log.ip_address || '0.0.0.0'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

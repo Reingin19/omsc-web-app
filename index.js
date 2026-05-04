@@ -5,171 +5,166 @@ import bcrypt from 'bcrypt';
 import 'dotenv/config';
 
 const app = express();
-app.use(cors());
+
+// --- MIDDLEWARE ---
+app.use(cors({
+    origin: '*', // Mas safe kung specific Vercel URL mo ilalagay mo rito later
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '1mb' }));
 
-// --- SUPABASE CONFIGURATION ---
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Gamitin ang Service Role Key para sa Admin override
-const supabase = createClient(supabaseUrl, supabaseKey);
+// --- SUPABASE CONFIG ---
+// Gagamit tayo ng fallback sa standard names para sa Vercel deployment
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('✅ Connected to Supabase Cloud');
+// Admin Client (Bypasses RLS - for logs and creating auth accounts)
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// --- HELPER FUNCTION PARA SA LOGS ---
-// Ngayon, sa Supabase na rin mag-sa-save ang logs
-const logActivity = async (action, user, status, details, ip) => {
+// Anon Client (Follows RLS - for generating user sessions)
+const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+
+// --- LOGGER HELPER ---
+const logActivity = async (action, userEmail, status, details, req) => {
     try {
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0';
         await supabase.from('security_logs').insert([
-            { action, user, status, details, ip_address: ip }
+            { action, user_email: userEmail, status, details, ip_address: ip }
         ]);
     } catch (err) {
-        console.error("Log Error:", err.message);
+        console.error("🔥 Logger Error:", err.message);
     }
 };
 
-// --- AUTH ROUTES ---
+// --- ROUTES ---
 
-// REGISTER ROUTE
-app.post('/register', async (req, res) => {
+// 1. REGISTER
+app.post('/api/register', async (req, res) => {
     const { 
         studentId, name, email, password, role, campus, 
         program, yearLevel, status, age, gender, isIndigenous, isPwd 
     } = req.body;
     
+    const cleanEmail = email?.trim().toLowerCase();
+    const cleanStudentId = studentId?.trim();
+
     try {
-        // 1. Check if user exists (using Supabase)
-        const { data: existingUser } = await supabase
+        // Check if user exists
+        const { data: existing } = await supabase
             .from('users')
             .select('email')
-            .or(`email.eq.${email},student_id.eq.${studentId}`)
-            .single();
+            .or(`email.eq.${cleanEmail},student_id.eq.${cleanStudentId}`);
 
-        if (existingUser) {
-            return res.status(400).json({ message: "Email or Student ID already registered" });
+        if (existing && existing.length > 0) {
+            return res.status(400).json({ message: "Email or Student ID already exists" });
         }
 
-        // 2. Hash Password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 3. Insert to Supabase 'users' table
-        const { data, error } = await supabase
+        // Save to your public.users table
+        const { data, error: dbError } = await supabase
             .from('users')
             .insert([{
-                student_id: studentId,
-                name,
-                email,
+                student_id: cleanStudentId,
+                name: name.trim(),
+                email: cleanEmail,
                 password: hashedPassword,
                 role: role || 'student',
-                campus,
-                program,
-                year_level: yearLevel,
+                campus, program, year_level: yearLevel,
                 status: status || 'active',
-                age,
-                gender,
-                is_indigenous: isIndigenous,
-                is_pwd: isPwd
+                age, gender, is_indigenous: isIndigenous, is_pwd: isPwd
             }])
             .select();
 
-        if (error) throw error;
+        if (dbError) throw dbError;
 
-        await logActivity('User Registration', email, 'success', `New account created for ${name}`, req.ip);
-        
-        res.status(201).json({ 
-            message: "Account created successfully!",
-            userId: data[0].id 
+        // Create Supabase Auth Account (Para may session sila)
+        await supabase.auth.admin.createUser({
+            email: cleanEmail,
+            password: password,
+            email_confirm: true,
+            user_metadata: { name: name.trim(), role: role || 'student' }
         });
+
+        await logActivity('User Registration', cleanEmail, 'success', `New account: ${name}`, req);
+        res.status(201).json({ message: "Account created!", userId: data[0].id });
     } catch (error) {
-        console.error("Register Error:", error.message);
-        res.status(500).json({ message: "Registration failed." });
+        res.status(500).json({ message: error.message });
     }
 });
 
-// LOGIN ROUTE
-app.post('/login', async (req, res) => {
+// 2. LOGIN (The "Fix-it-all" Route)
+app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
-    
+    const cleanEmail = email?.trim().toLowerCase();
+
     try {
-        // 1. Get user from Supabase
+        // Find user in your DB
         const { data: user, error } = await supabase
             .from('users')
             .select('*')
-            .eq('email', email)
-            .single();
+            .eq('email', cleanEmail)
+            .maybeSingle();
 
-        if (!user || error) {
-            await logActivity('Login Attempt', email, 'warning', 'User not found', req.ip);
-            return res.status(404).json({ message: "User not found" });
-        }
-        
-        // 2. Compare Password
+        if (!user) return res.status(404).json({ message: "User not found" });
+
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            await logActivity('Login Attempt', email, 'warning', 'Invalid password', req.ip);
-            return res.status(401).json({ message: "Invalid credentials" });
+        if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
+
+        // Get or Create Auth Session
+        let { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password,
+        });
+
+        // If no auth account yet (for old users), create it now
+        if (authError) {
+            await supabase.auth.admin.createUser({
+                email: cleanEmail,
+                password: password,
+                email_confirm: true,
+                user_metadata: { name: user.name, role: user.role }
+            });
+            
+            const retry = await supabaseAnon.auth.signInWithPassword({
+                email: cleanEmail,
+                password: password,
+            });
+            authData = retry.data;
         }
 
-        await logActivity('User Login', email, 'success', `Login as ${user.role}`, req.ip);
+        await logActivity('User Login', cleanEmail, 'success', `Logged in as ${user.role}`, req);
 
         res.json({ 
             id: user.id, 
-            studentId: user.student_id,
             role: user.role, 
             name: user.name, 
-            email: user.email, 
+            email: user.email,
             campus: user.campus,
-            message: "Login successful" 
+            access_token: authData?.session?.access_token || null,
+            refresh_token: authData?.session?.refresh_token || null
         });
     } catch (err) {
-        console.error("Login Error:", err.message);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({ message: "Internal server error" });
     }
 });
 
-// --- ADMIN & ANALYTICS ---
-
-app.get('/admin/analytics', async (req, res) => {
-    try {
-        // Mas madali ang aggregations sa Supabase client
-        const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
-        const { count: programCount } = await supabase.from('programs').select('*', { count: 'exact', head: true });
-        
-        // Para sa complex queries (like engagement rate), pwedeng gumamit ng .rpc() (Postgres Function)
-        // Pero para sa ngayon, manual count muna:
-        const { data: programs } = await supabase.from('programs').select('registered, capacity');
-        const totalRegistered = programs?.reduce((acc, curr) => acc + (curr.registered || 0), 0);
-        const totalCapacity = programs?.reduce((acc, curr) => acc + (curr.capacity || 0), 0);
-        
-        const engagementRate = totalCapacity > 0 ? ((totalRegistered / totalCapacity) * 100).toFixed(1) : 0;
-
-        res.json({
-            totalStudents: userCount,
-            totalPrograms: programCount,
-            engagementRate: parseFloat(engagementRate),
-            // Pwede mo pang dagdagan ang ibang data rito
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+// 3. LOGS (For Admin Dashboard)
+app.get('/api/admin/security-logs', async (req, res) => {
+    const { data, error } = await supabase
+        .from('security_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+    
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
 });
 
-// UPDATE ROLE
-app.put('/admin/users/:id', async (req, res) => {
-    const { role, adminEmail } = req.body;
-    try {
-        const { data: user } = await supabase.from('users').select('name').eq('id', req.params.id).single();
-        
-        await supabase.from('users').update({ role }).eq('id', req.params.id);
-        
-        await logActivity('Role Change', adminEmail || 'Admin', 'warning', `Changed ${user.name}'s role to ${role}`, req.ip);
-        res.json({ message: "User role updated" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+// --- VERCEL EXPORT ---
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(3001, () => console.log('🚀 Local dev on port 3001'));
+}
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`🚀 API Server running on port ${PORT}`);
-    console.log(`☁️ All data is now synced with Supabase Cloud`);
-});
+export default app;

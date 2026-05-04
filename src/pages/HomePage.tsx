@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase"; 
+import { supabase } from "../lib/supabase";
 import { Button } from "../../src/components/ui/button";
 import { Card } from "../../src/components/ui/card";
-import { 
-  BookOpen, FileText, ClipboardList, Users, 
-  GraduationCap, Calendar, MapPin, ImageIcon, ArrowRight 
+import {
+  BookOpen, FileText, ClipboardList, Users,
+  GraduationCap, Calendar, MapPin, ImageIcon, ArrowRight
 } from "lucide-react";
 
 interface HomePageProps {
@@ -24,7 +24,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activePage, setActivePage] = useState("home");
-  
+
   const youtubeVideoId = "A2JuNCYrUHE";
 
   const features = [
@@ -55,7 +55,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   ];
 
   const handleNavigation = (page: any) => {
-    setActivePage(page);
+    setActivePage(page.toLowerCase());
     onNavigate(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -81,7 +81,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
   return (
     <div className="w-full min-h-screen bg-white">
-      {/* --- NAVBAR (image_040be5.png Style) --- */}
+      {/* --- NAVBAR --- */}
       <header className="fixed top-0 left-0 right-0 h-[80px] bg-[#0066cc] z-50 shadow-lg">
         <div className="max-w-[1440px] mx-auto px-6 h-full flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer group" onClick={() => handleNavigation("home")}>
@@ -93,7 +93,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
           <nav className="hidden md:flex items-center gap-2 font-bold text-[11px] uppercase tracking-wider">
             {['home', 'programs', 'materials', 'surveys', 'about'].map((item) => (
-              <button 
+              <button
                 key={item}
                 onClick={() => handleNavigation(item)}
                 className="relative px-6 py-2 transition-all duration-300 group"
@@ -135,7 +135,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         <div className="relative max-w-[1200px] mx-auto px-6 h-full flex items-center z-20">
           <div className="max-w-2xl space-y-6 text-left animate-in fade-in slide-in-from-left-10 duration-1000">
             <h1 className="text-5xl md:text-7xl font-black uppercase text-white leading-none tracking-tighter">
-              Empowering Students, <br/> <span className="text-blue-400">Enriching Lives.</span>
+              Empowering Students, <br /> <span className="text-blue-400">Enriching Lives.</span>
             </h1>
             <p className="text-lg md:text-xl text-white/90 leading-relaxed font-medium">
               Supporting student development through comprehensive guidance programs and educational materials aligned with CHED standards.
@@ -152,14 +152,14 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* --- SERVICES/FEATURES SECTION --- */}
+      {/* --- SERVICES SECTION --- */}
       <section className="py-24 bg-white border-b border-slate-100">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
           <div className="mb-16 space-y-2">
             <h2 className="text-4xl font-black uppercase text-slate-900 tracking-tighter">Our Guidance Services</h2>
             <p className="text-slate-500 font-bold uppercase text-xs tracking-[0.2em]">Helping you navigate your academic journey</p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature, index) => (
               <Card
@@ -182,7 +182,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      {/* --- LATEST PROGRAMS (Swak Display) --- */}
+      {/* --- LATEST PROGRAMS --- */}
       <section className="py-24 bg-slate-50">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="flex justify-between items-end mb-16">
@@ -199,18 +199,17 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             {isLoading ? (
               [1, 2, 3, 4].map((n) => <div key={n} className="aspect-[4/3] bg-slate-200 animate-pulse rounded-[2.5rem]" />)
             ) : (
-              programs.map((program, index) => (
-                <Card 
-                  key={program.id} 
+              programs.map((program) => (
+                <Card
+                  key={program.id}
                   className="hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] transition-all duration-700 rounded-[2.5rem] border-none group bg-white overflow-hidden flex flex-col"
                   onClick={() => handleNavigation("programs")}
                 >
-                  {/* IMAGE - SWAK NO CROP */}
                   <div className="aspect-[4/3] bg-[#0f172a] relative overflow-hidden">
                     {program.image_url ? (
-                      <img 
-                        src={program.image_url} 
-                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700" 
+                      <img
+                        src={program.image_url}
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full text-slate-700 bg-slate-100">
@@ -225,7 +224,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                     </h3>
                     <div className="mt-auto space-y-3 pt-4 border-t border-slate-50">
                       <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        <Calendar size={14} className="text-blue-500" /> 
+                        <Calendar size={14} className="text-blue-500" />
                         {new Date(program.date).toLocaleDateString()}
                       </div>
                       <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -247,7 +246,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl" />
             <div className="relative z-10 space-y-8">
               <h2 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter">
-                Ready to level up your <br/> student life?
+                Ready to level up your <br /> student life?
               </h2>
               <p className="text-blue-100 text-lg md:text-xl max-w-2xl mx-auto font-medium opacity-90">
                 Login to access your personalized dashboard and explore all the guidance resources available to you.
